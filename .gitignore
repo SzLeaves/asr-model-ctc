@@ -1,0 +1,7 @@
+.vscode/
+data/
+output/
+
+*.log
+*.pkl
+*.h5
