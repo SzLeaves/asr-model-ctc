@@ -3,6 +3,7 @@
 
 # 2. CTC + BiGRU模型
 import os
+import time
 import pathlib
 import pickle
 
@@ -26,26 +27,22 @@ Model = keras.models.Model
 Adam = keras.optimizers.Adam
 ctc_batch_cost = keras.backend.ctc_batch_cost
 EarlyStopping = keras.callbacks.EarlyStopping
-Input, Concatenate, Activation, Lambda, Add = (
+Input, Lambda, Add = (
     keras.layers.Input,
-    keras.layers.Concatenate,
-    keras.layers.Activation,
     keras.layers.Lambda,
     keras.layers.Add,
 )
-Conv1D, GRU, Dense, BatchNormalization = (
+Conv1D, GRU, Dense, Dropout = (
     keras.layers.Conv1D,
     keras.layers.GRU,
     keras.layers.Dense,
-    keras.layers.BatchNormalization,
+    keras.layers.Dropout,
 )
 
 # 音频/语音标注文件路径
 DS_PATH = "../data/"
 # 模型文件路径
 FILES_PATH = "../output/"
-# mfcc特征维数
-MFCC_VALUE = 13
 
 
 # 0. 读取数据集
@@ -146,7 +143,9 @@ def ctc_batch_generator(data, labels, dict_list, n_mfcc, max_length, batch_size)
 # 2. 构建BiGRU模型
 
 
-def model_bigru(words_size, n_mfcc, n_cells=512, n_drop=0.3, max_length=50, learning_rate=0.01):
+def model_bigru(
+    words_size, n_mfcc, n_cells=512, n_drop=0.3, max_length=50, learning_rate=0.01
+):
     """
     按照指定参数构建BiGRU模型
     :param words_size:     词库大小
@@ -158,30 +157,36 @@ def model_bigru(words_size, n_mfcc, n_cells=512, n_drop=0.3, max_length=50, lear
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
-    GRU_NUMS = 2
+    GRU_NUMS = 3
+
+    # 全连接层
+    def dense(inputs, units, activation, drop, use_bias=True):
+        inputs = Dropout(drop)(inputs)
+        return Dense(units=units, activation=activation, use_bias=use_bias)(inputs)
+
+    # BiGRU层
+    def bigru(inputs, drop, units):
+        inputs = Dropout(drop)(inputs)
+        gru_1 = GRU(units, return_sequences=True)(inputs)
+        gru_2 = GRU(units, return_sequences=True, go_backwards=True)(inputs)
+        return Add()([gru_1, gru_2])
 
     # 定义模型输入数据格式 (输入格式与ctc_batch_generator的返回值一致)
     input_data = Input(name="X", shape=(None, n_mfcc))
 
-    # 一维卷积层
-    conv_1 = Conv1D(filters=n_cells, kernel_size=4, strides=1, padding="same", activation=None)(input_data)
-    conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
+    # 两层全连接
+    dense_1 = dense(input_data, n_cells, "relu", n_drop)
+    dense_2 = dense(dense_1, n_cells, "relu", n_drop)
 
-    # 定义多层BiGRU网络结构 #
-    gru_list = list()
-    # 添加多层GRU
-    for layer in range(GRU_NUMS):
-        gru_1 = GRU(n_cells, return_sequences=True, dropout=n_drop)
-        gru_2 = GRU(n_cells, return_sequences=True, dropout=n_drop, go_backwards=True)
-        gru_list.append((gru_1, gru_2))
+    # 多层双向GRU
+    gru_all = dense_2
+    for num_layer in range(GRU_NUMS):
+        gru_all = bigru(gru_all, n_drop, n_cells)
 
-    # 合并双向结构并对输出正则化
-    gru_all = conv_1
-    for layer in gru_list:
-        gru_all = BatchNormalization()(Add()([layer[0](gru_all), layer[1](gru_all)]))
+    dense_3 = dense(gru_all, n_cells, "relu", n_drop)
 
     # 输出层 使用softmax多分类输出
-    dense_output = Dense(words_size + 1, activation="softmax")(gru_all)
+    dense_output = Dense(words_size + 1, activation="softmax")(dense_3)
     # 保存GRU模型结构
     bigru_model = Model(inputs=input_data, outputs=dense_output)
 
@@ -196,11 +201,16 @@ def model_bigru(words_size, n_mfcc, n_cells=512, n_drop=0.3, max_length=50, lear
         [y_true, dense_output, input_length, label_length]
     )
     # 保存CTC模型结构
-    ctc_model = Model(inputs=[input_data, y_true, input_length, label_length], outputs=ctc_loss_out)
+    ctc_model = Model(
+        inputs=[input_data, y_true, input_length, label_length], outputs=ctc_loss_out
+    )
 
     # 定义模型优化器, 编译模型
+
     opt_ada = Adam(learning_rate=learning_rate)
-    ctc_model.compile(loss={"ctc": lambda y_true, dense_output: dense_output}, optimizer=opt_ada)
+    ctc_model.compile(
+        loss={"ctc": lambda y_true, dense_output: dense_output}, optimizer=opt_ada
+    )
     # 输出模型信息
     ctc_model.summary()
 
@@ -209,42 +219,50 @@ def model_bigru(words_size, n_mfcc, n_cells=512, n_drop=0.3, max_length=50, lear
 
 # 3. 分割数据集 / 训练模型
 
-test_size = 0.3  # 测试集占比
-labels_length = 60  # 标签固定长度
-learning_rate = 0.0005  # 学习速率
-dropout = 0.3  # dropout比例
-batch_size = 40  # 每批次数据集大小
+num_mfcc = 32  # mfcc特征维数
+test_size = 0.2  # 测试集占比
+labels_length = 50  # 标签固定长度
+learning_rate = 0.0008  # 学习速率
+dropout = 0.2  # dropout比例
+batch_size = 35  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
-epochs = 250  # 训练次数
+epochs = 300  # 训练次数
 
 # 划分训练集/测试集
-X_train, X_test, y_train, y_test = train_test_split(train_ds, train_label, test_size=test_size)
+X_train, X_test, y_train, y_test = train_test_split(
+    train_ds, train_label, test_size=test_size
+)
 
 # CTC模型数据generator
 train_batch = ctc_batch_generator(
     X_train,
     y_train,
     char2id,
-    MFCC_VALUE,
+    num_mfcc,
     batch_size=batch_size,
     max_length=labels_length,
 )
 test_batch = ctc_batch_generator(
-    X_test, y_test, char2id, MFCC_VALUE, batch_size=batch_size, max_length=labels_length
+    X_test, y_test, char2id, num_mfcc, batch_size=batch_size, max_length=labels_length
 )
 
 # 新建模型, ctc_model用于训练, 权重保存在bigru_model中
 bigru_model, ctc_model = model_bigru(
     len(char2id),
-    MFCC_VALUE,
+    num_mfcc,
     n_cells=num_cells,
-    max_length=labels_length,
     n_drop=dropout,
+    max_length=labels_length,
     learning_rate=learning_rate,
 )
 
 # 设置回调函数，在训练验证loss没有继续下降时停止训练
-earlystopping = EarlyStopping(monitor="val_loss", patience=15, min_delta=0.001, restore_best_weights=True)
+
+earlystopping = EarlyStopping(
+    monitor="val_loss", patience=30, min_delta=1e-5, restore_best_weights=True
+)
+
+start = time.time()
 
 # 训练模型
 history = ctc_model.fit(
@@ -255,6 +273,9 @@ history = ctc_model.fit(
     steps_per_epoch=len(X_train) // batch_size,
     validation_steps=len(X_test) // batch_size,
 )
+
+end = time.time() - start
+print("-- Times: %.2fs --" % end)
 
 # 保存模型
 bigru_model.save(FILES_PATH + "models/bigru.h5")
