@@ -281,4 +281,4 @@ print("-- Times: %.2fs --" % end)
 bigru_model.save(FILES_PATH + "models/bigru.h5")
 # 保存训练数据
 with open(FILES_PATH + "models/bigru_history.pkl", "wb") as file:
-    pickle.dump(history, file)
+    pickle.dump(history.history, file)
