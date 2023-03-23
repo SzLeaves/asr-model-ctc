@@ -45,7 +45,7 @@ Conv1D, Multiply, Add = (
 # 音频/语音标注文件路径
 DS_PATH = "../data/"
 # 模型文件路径
-FILES_PATH = "../model/"
+FILES_PATH = "../output/"
 
 
 # 0. 读取数据集
