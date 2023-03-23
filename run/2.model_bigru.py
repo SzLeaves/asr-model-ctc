@@ -22,11 +22,14 @@ import tensorflow as tf
 
 # 导入keras API
 keras = tf.keras
-# 导入模型
+
 Model = keras.models.Model
 Adam = keras.optimizers.Adam
 ctc_batch_cost = keras.backend.ctc_batch_cost
-EarlyStopping = keras.callbacks.EarlyStopping
+EarlyStopping, PiecewiseConstantDecay = (
+    keras.callbacks.EarlyStopping,
+    keras.optimizers.schedules.PiecewiseConstantDecay,
+)
 Input, Lambda, Add = (
     keras.layers.Input,
     keras.layers.Lambda,
@@ -153,7 +156,7 @@ def model_bigru(
     :param n_cells:        网络神经元个数
     :param n_drop:         GRU层dropout比例数值
     :param max_length:     标签长度
-    :param learning_rate:  ctc_loss优化器学习速率
+    :param learning_rate:  Adam优化器学习速率
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
@@ -220,13 +223,19 @@ def model_bigru(
 # 3. 分割数据集 / 训练模型
 
 num_mfcc = 32  # mfcc特征维数
-test_size = 0.2  # 测试集占比
-labels_length = 50  # 标签固定长度
-learning_rate = 0.0008  # 学习速率
+test_size = 0.1  # 测试集占比
+labels_length = 60  # 标签固定长度
 dropout = 0.2  # dropout比例
-batch_size = 35  # 每批次数据集大小
+batch_size = 32  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
-epochs = 300  # 训练次数
+epochs = 280  # 训练次数
+
+# 分段动态学习率
+init_lr = 8 * 1e-4  # 初始学习速率
+decay_boundaries = [70, 100]  # 学习率次数区间
+decay_rates = [init_lr, init_lr - 1e-4, init_lr - (2 * 1e-4)]  # 区间指定学习率
+lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
+
 
 # 划分训练集/测试集
 X_train, X_test, y_train, y_test = train_test_split(
@@ -253,13 +262,12 @@ bigru_model, ctc_model = model_bigru(
     n_cells=num_cells,
     n_drop=dropout,
     max_length=labels_length,
-    learning_rate=learning_rate,
+    learning_rate=lr_schedule,
 )
 
-# 设置回调函数，在训练验证loss没有继续下降时停止训练
-
+# 回调函数，在训练验证loss没有继续下降时停止训练
 earlystopping = EarlyStopping(
-    monitor="val_loss", patience=30, min_delta=1e-5, restore_best_weights=True
+    monitor="val_loss", patience=20, min_delta=1e-5, restore_best_weights=True
 )
 
 start = time.time()
