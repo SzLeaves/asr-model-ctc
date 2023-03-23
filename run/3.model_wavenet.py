@@ -8,26 +8,28 @@ import pickle
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
 
-# 设置显存大小
-gpus = tf.config.experimental.list_physical_devices("GPU")
-memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8704)
-tf.config.experimental.set_virtual_device_configuration(gpus[0], [memory_size])
+# # 设置显存大小
+# gpus = tf.config.experimental.list_physical_devices("GPU")
+# memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8704)
+# tf.config.experimental.set_virtual_device_configuration(gpus[0], [memory_size])
 
 # 导入keras API
 keras = tf.keras
-# 导入模型
+
 ModelCheckpoint = keras.callbacks.ModelCheckpoint
 ctc_batch_cost = keras.backend.ctc_batch_cost
 Model = keras.models.Model
 SGD = keras.optimizers.SGD
-EarlyStopping = keras.callbacks.EarlyStopping
+EarlyStopping, PiecewiseConstantDecay = (
+    keras.callbacks.EarlyStopping,
+    keras.optimizers.schedules.PiecewiseConstantDecay,
+)
 Input, BatchNormalization, Activation, Lambda = (
     keras.layers.Input,
     keras.layers.BatchNormalization,
@@ -40,15 +42,10 @@ Conv1D, Multiply, Add = (
     keras.layers.Add,
 )
 
-plt.rcParams["font.sans-serif"] = ["Microsoft YaHei"]
-plt.rcParams["axes.unicode_minus"] = False
-
 # 音频/语音标注文件路径
 DS_PATH = "../data/"
 # 模型文件路径
 FILES_PATH = "../model/"
-# mfcc特征维数
-MFCC_VALUE = 20
 
 
 # 0. 读取数据集
@@ -66,6 +63,7 @@ with open(FILES_PATH + "dataset/words_vec.pkl", "rb") as file:
 
 
 # 1. 构建CTC模型的input / output
+
 
 def ctc_loss(args):
     """
@@ -147,7 +145,15 @@ def ctc_batch_generator(data, labels, dict_list, n_mfcc, max_length, batch_size)
 # 2. 构建WaveNet模型
 
 
-def model_wavenet(words_size, n_mfcc, filter_range, n_filters=128, n_blocks=3, kernel_size=7):
+def model_wavenet(
+    words_size,
+    n_mfcc,
+    filter_range,
+    n_filters=128,
+    n_blocks=3,
+    kernel_size=7,
+    learning_rate=0.02,
+):
     """
     按照指定参数构建WaveNet模型
     :param words_size:     词库大小
@@ -156,6 +162,7 @@ def model_wavenet(words_size, n_mfcc, filter_range, n_filters=128, n_blocks=3, k
     :param n_filters:      卷积核尺寸
     :param n_blocks:       扩大层数
     :param kernel_size:    扩大层(1-dim)卷积核尺寸
+    :param learning_rate:  SGD优化器学习速率
     :return:               (wavenet, ctc_model) 返回构建的WaveNet模型和CTC Loss模型
     """
 
@@ -180,8 +187,12 @@ def model_wavenet(words_size, n_mfcc, filter_range, n_filters=128, n_blocks=3, k
 
     # 扩大卷积网络
     def res_block(inputs, filters, kernel_size, dilation_rate):
-        res_1 = activation(normal(conv1d(inputs, filters, kernel_size, dilation_rate)), "tanh")
-        res_2 = activation(normal(conv1d(inputs, filters, kernel_size, dilation_rate)), "sigmoid")
+        res_1 = activation(
+            normal(conv1d(inputs, filters, kernel_size, dilation_rate)), "tanh"
+        )
+        res_2 = activation(
+            normal(conv1d(inputs, filters, kernel_size, dilation_rate)), "sigmoid"
+        )
         res_add = Multiply()([res_1, res_2])
 
         res_active_1 = activation(normal(conv1d(res_add, filters, 1, 1)), "tanh")
@@ -220,11 +231,15 @@ def model_wavenet(words_size, n_mfcc, filter_range, n_filters=128, n_blocks=3, k
         [y_true, conv_output, input_length, label_length]
     )
     # 保存CTC模型结构
-    ctc_model = Model(inputs=[input_data, y_true, input_length, label_length], outputs=ctc_loss_out)
+    ctc_model = Model(
+        inputs=[input_data, y_true, input_length, label_length], outputs=ctc_loss_out
+    )
 
     # 定义模型优化器, 编译模型
-    opt_sgd = SGD(learning_rate=0.03, momentum=0.9, nesterov=True, clipnorm=5)
-    ctc_model.compile(loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_sgd)
+    opt_sgd = SGD(learning_rate=learning_rate, momentum=0.9, nesterov=True, clipnorm=5)
+    ctc_model.compile(
+        loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_sgd
+    )
 
     # 输出模型信息
     ctc_model.summary()
@@ -234,32 +249,45 @@ def model_wavenet(words_size, n_mfcc, filter_range, n_filters=128, n_blocks=3, k
 
 #  3. 分割数据集 / 训练模型
 
-test_size = 0.2  # 测试集占比
-labels_length = 70 # 标签固定长度
-batch_size = 45 # 每批次数据集大小
-filter_range = [1, 2, 4, 8, 16] # 扩大范围
-epochs = 300 # 训练次数
+num_mfcc = 20  # mfcc特征维数
+test_size = 0.1  # 测试集占比
+labels_length = 60  # 标签固定长度
+batch_size = 35  # 每批次数据集大小
+filter_range = [1, 2, 4, 8, 16]  # 扩大范围
+epochs = 280  # 训练次数
+
+# 分段动态学习率
+decay_boundaries = [10, 90]  # 学习率迭代回合区间
+decay_rates = [0.03, 0.02, 0.01]  # 区间指定学习率
+lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
 
 # 划分训练集/测试集
-X_train, X_test, y_train, y_test = train_test_split(train_ds, train_label, test_size=test_size)
+X_train, X_test, y_train, y_test = train_test_split(
+    train_ds, train_label, test_size=test_size
+)
 
 # CTC模型数据generator
 train_batch = ctc_batch_generator(
     X_train,
     y_train,
     char2id,
-    MFCC_VALUE,
+    num_mfcc,
     batch_size=batch_size,
     max_length=labels_length,
 )
 test_batch = ctc_batch_generator(
-    X_test, y_test, char2id, MFCC_VALUE, batch_size=batch_size, max_length=labels_length
+    X_test, y_test, char2id, num_mfcc, batch_size=batch_size, max_length=labels_length
 )
 
-wavenet_model, ctc_model = model_wavenet(len(char2id), MFCC_VALUE, filter_range)
+# 新建模型, 权重保存在wavenet_model中
+wavenet_model, ctc_model = model_wavenet(
+    len(char2id), num_mfcc, filter_range, learning_rate=lr_schedule
+)
 
 # 设置回调函数，在训练验证loss没有继续下降时停止训练
-earlystopping = EarlyStopping(monitor="val_loss", patience=15, min_delta=0.001, restore_best_weights=True)
+earlystopping = EarlyStopping(
+    monitor="val_loss", patience=20, min_delta=1e-5, restore_best_weights=True
+)
 
 # 训练模型
 history = ctc_model.fit(
@@ -275,4 +303,4 @@ history = ctc_model.fit(
 wavenet_model.save(FILES_PATH + "wavenet.h5")
 # 保存训练数据
 with open(FILES_PATH + "models/wavenet_history.pkl", "wb") as file:
-    pickle.dump(history, file)
+    pickle.dump(history.history, file)
