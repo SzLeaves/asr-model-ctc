@@ -26,7 +26,10 @@ keras = tf.keras
 Model = keras.models.Model
 Adam = keras.optimizers.Adam
 ctc_batch_cost = keras.backend.ctc_batch_cost
-EarlyStopping = keras.callbacks.EarlyStopping
+EarlyStopping, PiecewiseConstantDecay = (
+    keras.callbacks.EarlyStopping,
+    keras.optimizers.schedules.PiecewiseConstantDecay,
+)
 Input, Lambda, Add = (
     keras.layers.Input,
     keras.layers.Lambda,
@@ -228,9 +231,8 @@ num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
 
 # 分段动态学习率
-init_lr = 8 * 1e-4  # 初始学习速率
 decay_boundaries = [70, 100]  # 学习率次数区间
-decay_rates = [init_lr, init_lr - 1e-4, init_lr - (2 * 1e-4)]  # 区间指定学习率
+decay_rates = [0.0008, 0.0007, 0.0006]  # 区间指定学习率
 lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
 
 
