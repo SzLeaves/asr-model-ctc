@@ -249,7 +249,7 @@ def model_wavenet(
 
 #  3. 分割数据集 / 训练模型
 
-num_mfcc = 20  # mfcc特征维数
+num_mfcc = 32  # mfcc特征维数
 test_size = 0.1  # 测试集占比
 labels_length = 60  # 标签固定长度
 batch_size = 35  # 每批次数据集大小
