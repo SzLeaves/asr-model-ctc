@@ -26,10 +26,7 @@ keras = tf.keras
 Model = keras.models.Model
 Adam = keras.optimizers.Adam
 ctc_batch_cost = keras.backend.ctc_batch_cost
-EarlyStopping, PiecewiseConstantDecay = (
-    keras.callbacks.EarlyStopping,
-    keras.optimizers.schedules.PiecewiseConstantDecay,
-)
+EarlyStopping = keras.callbacks.EarlyStopping
 Input, Lambda, Add = (
     keras.layers.Input,
     keras.layers.Lambda,
