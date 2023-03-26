@@ -252,13 +252,13 @@ def model_wavenet(
 num_mfcc = 32  # mfcc特征维数
 test_size = 0.1  # 测试集占比
 labels_length = 60  # 标签固定长度
-batch_size = 35  # 每批次数据集大小
+batch_size = 40  # 每批次数据集大小
 filter_range = [1, 2, 4, 8, 16]  # 扩大范围
 epochs = 280  # 训练次数
 
 # 分段动态学习率
-decay_boundaries = [10, 90]  # 学习率迭代回合区间
-decay_rates = [0.03, 0.02, 0.01]  # 区间指定学习率
+decay_boundaries = [10, 25]  # 学习率迭代回合区间
+decay_rates = [0.03, 0.02, 0.001]  # 区间指定学习率
 lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
 
 # 划分训练集/测试集
@@ -300,7 +300,7 @@ history = ctc_model.fit(
 )
 
 # 保存模型
-wavenet_model.save(FILES_PATH + "wavenet.h5")
+wavenet_model.save(FILES_PATH + "models/wavenet.h5")
 # 保存训练数据
 with open(FILES_PATH + "models/wavenet_history.pkl", "wb") as file:
     pickle.dump(history.history, file)
