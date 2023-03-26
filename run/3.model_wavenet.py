@@ -25,10 +25,10 @@ keras = tf.keras
 ModelCheckpoint = keras.callbacks.ModelCheckpoint
 ctc_batch_cost = keras.backend.ctc_batch_cost
 Model = keras.models.Model
-SGD = keras.optimizers.SGD
-EarlyStopping, PiecewiseConstantDecay = (
+Adam = keras.optimizers.Adam
+EarlyStopping, ExponentialDecay = (
     keras.callbacks.EarlyStopping,
-    keras.optimizers.schedules.PiecewiseConstantDecay,
+    keras.optimizers.schedules.ExponentialDecay,
 )
 Input, BatchNormalization, Activation, Lambda = (
     keras.layers.Input,
@@ -152,7 +152,7 @@ def model_wavenet(
     n_filters=128,
     n_blocks=3,
     kernel_size=7,
-    learning_rate=0.02,
+    learning_rate=0.001,
 ):
     """
     按照指定参数构建WaveNet模型
@@ -236,9 +236,9 @@ def model_wavenet(
     )
 
     # 定义模型优化器, 编译模型
-    opt_sgd = SGD(learning_rate=learning_rate, momentum=0.9, nesterov=True, clipnorm=5)
+    opt_ada = Adam(learning_rate=learning_rate)
     ctc_model.compile(
-        loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_sgd
+        loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_ada
     )
 
     # 输出模型信息
@@ -256,10 +256,16 @@ batch_size = 40  # 每批次数据集大小
 filter_range = [1, 2, 4, 8, 16]  # 扩大范围
 epochs = 280  # 训练次数
 
-# 分段动态学习率
-decay_boundaries = [10, 25]  # 学习率迭代回合区间
-decay_rates = [0.03, 0.02, 0.001]  # 区间指定学习率
-lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
+# 动态学习率
+initial_learning_rate = 0.001   # 初始学习率
+decay_steps = 350   # epoch衰减步数  
+decay_rate = 0.1    # 衰减值
+# 指数衰减
+lr_schedule = ExponentialDecay(
+    initial_learning_rate=initial_learning_rate,
+    decay_steps=decay_steps,
+    decay_rate=decay_rate,
+)
 
 # 划分训练集/测试集
 X_train, X_test, y_train, y_test = train_test_split(
