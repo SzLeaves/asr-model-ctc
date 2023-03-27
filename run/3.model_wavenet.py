@@ -257,8 +257,8 @@ filter_range = [1, 2, 4, 8, 16]  # 扩大范围
 epochs = 280  # 训练次数
 
 # 动态学习率
-initial_learning_rate = 0.001   # 初始学习率
-decay_steps = 350   # epoch衰减步数  
+initial_learning_rate = 0.02   # 初始学习率
+decay_steps = 20000   # epoch衰减步数  
 decay_rate = 0.1    # 衰减值
 # 指数衰减
 lr_schedule = ExponentialDecay(
