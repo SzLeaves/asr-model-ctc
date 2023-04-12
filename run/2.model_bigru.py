@@ -165,7 +165,7 @@ def model_bigru(
     dense_1 = Dense(n_cells, activation="relu")(input_data)
     dense_2 = Dense(n_cells, activation="relu")(dense_1)
 
-    # 双向GRU X1 4层
+    # 双向GRU X1 6层
     gru_1 = GRU(n_cells, return_sequences=True, dropout=n_drop)(dense_2)
     gru_2 = GRU(n_cells, return_sequences=True, dropout=n_drop, go_backwards=True)(
         dense_2
@@ -178,8 +178,15 @@ def model_bigru(
     )
     gru_all_2 = Add()([gru_3, gru_4])  # 合并结构
 
+    gru_5 = GRU(n_cells, return_sequences=True, dropout=n_drop)(gru_all_2)
+    gru_6 = GRU(n_cells, return_sequences=True, dropout=n_drop, go_backwards=True)(
+        gru_all_2
+    )
+    gru_all_3 = Add()([gru_5, gru_6])  # 合并结构
+
+
     # 全连接层整合
-    dense_3 = Dense(n_cells, activation="relu")(gru_all_2)
+    dense_3 = Dense(n_cells, activation="relu")(gru_all_3)
 
     # 输出层 使用softmax多分类输出
     dense_output = Dense(words_size + 1, activation="softmax")(dense_3)
@@ -274,7 +281,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/test/bigru-x4.h5")
+bigru_model.save(FILES_PATH + "models/test/bigru-x6.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/test/bigru-x4-h.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/bigru-x6-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
