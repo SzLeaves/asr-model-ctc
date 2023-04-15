@@ -22,24 +22,23 @@ import tensorflow as tf
 
 # 导入keras API
 keras = tf.keras
-
+# 导入模型
 Model = keras.models.Model
 Adam = keras.optimizers.Adam
 ctc_batch_cost = keras.backend.ctc_batch_cost
-EarlyStopping, PiecewiseConstantDecay = (
-    keras.callbacks.EarlyStopping,
-    keras.optimizers.schedules.PiecewiseConstantDecay,
-)
-Input, Lambda, Add = (
+EarlyStopping = keras.callbacks.EarlyStopping
+Input, Concatenate, Activation, Lambda, Add = (
     keras.layers.Input,
+    keras.layers.Concatenate,
+    keras.layers.Activation,
     keras.layers.Lambda,
     keras.layers.Add,
 )
-Conv1D, GRU, Dense, Dropout = (
+Conv1D, GRU, Dense, BatchNormalization = (
     keras.layers.Conv1D,
     keras.layers.GRU,
     keras.layers.Dense,
-    keras.layers.Dropout,
+    keras.layers.BatchNormalization,
 )
 
 # 音频/语音标注文件路径
@@ -160,36 +159,32 @@ def model_bigru(
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
-    GRU_NUMS = 3
-
-    # 全连接层
-    def dense(inputs, units, activation, drop, use_bias=True):
-        inputs = Dropout(drop)(inputs)
-        return Dense(units=units, activation=activation, use_bias=use_bias)(inputs)
-
-    # BiGRU层
-    def bigru(inputs, drop, units):
-        inputs = Dropout(drop)(inputs)
-        gru_1 = GRU(units, return_sequences=True)(inputs)
-        gru_2 = GRU(units, return_sequences=True, go_backwards=True)(inputs)
-        return Add()([gru_1, gru_2])
+    GRU_NUMS = 2
 
     # 定义模型输入数据格式 (输入格式与ctc_batch_generator的返回值一致)
     input_data = Input(name="X", shape=(None, n_mfcc))
 
-    # 两层全连接
-    dense_1 = dense(input_data, n_cells, "relu", n_drop)
-    dense_2 = dense(dense_1, n_cells, "relu", n_drop)
+    # 一维卷积层
+    conv_1 = Conv1D(
+        filters=n_cells, kernel_size=4, strides=1, padding="same", activation=None
+    )(input_data)
+    conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
 
-    # 多层双向GRU
-    gru_all = dense_2
-    for num_layer in range(GRU_NUMS):
-        gru_all = bigru(gru_all, n_drop, n_cells)
+    # 定义多层BiGRU网络结构 #
+    gru_list = list()
+    # 添加多层GRU
+    for layer in range(GRU_NUMS):
+        gru_1 = GRU(n_cells, return_sequences=True, dropout=n_drop)
+        gru_2 = GRU(n_cells, return_sequences=True, dropout=n_drop, go_backwards=True)
+        gru_list.append((gru_1, gru_2))
 
-    dense_3 = dense(gru_all, n_cells, "relu", n_drop)
+    # 合并双向结构并对输出正则化
+    gru_all = conv_1
+    for layer in gru_list:
+        gru_all = BatchNormalization()(Add()([layer[0](gru_all), layer[1](gru_all)]))
 
     # 输出层 使用softmax多分类输出
-    dense_output = Dense(words_size + 1, activation="softmax")(dense_3)
+    dense_output = Dense(words_size + 1, activation="softmax")(gru_all)
     # 保存GRU模型结构
     bigru_model = Model(inputs=input_data, outputs=dense_output)
 
@@ -231,9 +226,7 @@ num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
 
 # 分段动态学习率
-decay_boundaries = [70, 100]  # 学习率次数区间
-decay_rates = [0.0008, 0.0007, 0.0006]  # 区间指定学习率
-lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
+lr = 0.001
 
 
 # 划分训练集/测试集
@@ -261,7 +254,7 @@ bigru_model, ctc_model = model_bigru(
     n_cells=num_cells,
     n_drop=dropout,
     max_length=labels_length,
-    learning_rate=lr_schedule,
+    learning_rate=lr,
 )
 
 # 回调函数，在训练验证loss没有继续下降时停止训练
@@ -285,7 +278,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/bigru.h5")
+bigru_model.save(FILES_PATH + "models/test/conv/bigru-conv-x4.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/bigru_history.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/conv/bigru-conv-x4-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
