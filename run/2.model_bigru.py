@@ -160,7 +160,7 @@ def model_bigru(
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
-    GRU_NUMS = 3
+    GRU_NUMS = 2
 
     # 全连接层
     def dense(inputs, units, activation, drop, use_bias=True):
@@ -229,11 +229,7 @@ dropout = 0.2  # dropout比例
 batch_size = 32  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
-
-# 分段动态学习率
-decay_boundaries = [70, 100]  # 学习率次数区间
-decay_rates = [0.0008, 0.0007, 0.0006]  # 区间指定学习率
-lr_schedule = PiecewiseConstantDecay(boundaries=decay_boundaries, values=decay_rates)
+lr = 0.001
 
 
 # 划分训练集/测试集
@@ -261,7 +257,7 @@ bigru_model, ctc_model = model_bigru(
     n_cells=num_cells,
     n_drop=dropout,
     max_length=labels_length,
-    learning_rate=lr_schedule,
+    learning_rate=lr,
 )
 
 # 回调函数，在训练验证loss没有继续下降时停止训练
@@ -285,7 +281,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/bigru.h5")
+bigru_model.save(FILES_PATH + "models/test/dropout/bigru-drop-x2.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/bigru_history.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/dropout/bigru-drop-x2-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
