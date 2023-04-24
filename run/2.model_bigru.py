@@ -281,7 +281,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/test/dropout/bigru-drop-x2.h5")
+bigru_model.save(FILES_PATH + "models/test/dropout/bigru-drop-x4.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/test/dropout/bigru-drop-x2-h.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/dropout/bigru-drop-x4-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
