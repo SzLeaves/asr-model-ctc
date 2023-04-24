@@ -34,11 +34,12 @@ Input, Concatenate, Activation, Lambda, Add = (
     keras.layers.Lambda,
     keras.layers.Add,
 )
-Conv1D, GRU, Dense, BatchNormalization = (
+Conv1D, GRU, Dense, BatchNormalization, Dropout = (
     keras.layers.Conv1D,
     keras.layers.GRU,
     keras.layers.Dense,
     keras.layers.BatchNormalization,
+    keras.layers.Dropout,
 )
 
 # 音频/语音标注文件路径
@@ -159,32 +160,36 @@ def model_bigru(
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
-    GRU_NUMS = 1
+    GRU_NUMS = 2
+
+    # BiGRU层
+    def bigru(inputs, drop, units):
+        inputs = Dropout(drop)(inputs)
+        gru_1 = GRU(units, return_sequences=True)(inputs)
+        gru_2 = GRU(units, return_sequences=True, go_backwards=True)(inputs)
+        return Add()([gru_1, gru_2])
 
     # 定义模型输入数据格式 (输入格式与ctc_batch_generator的返回值一致)
     input_data = Input(name="X", shape=(None, n_mfcc))
 
     # 一维卷积层
     conv_1 = Conv1D(
-        filters=n_cells, kernel_size=4, strides=1, padding="same", activation=None
+        filters=n_mfcc, kernel_size=4, strides=1, padding="vaild", activation=None
     )(input_data)
     conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
 
     # 定义多层BiGRU网络结构 #
-    gru_list = list()
-    # 添加多层GRU
-    for layer in range(GRU_NUMS):
-        gru_1 = GRU(n_cells, return_sequences=True, dropout=n_drop)
-        gru_2 = GRU(n_cells, return_sequences=True, dropout=n_drop, go_backwards=True)
-        gru_list.append((gru_1, gru_2))
-
-    # 合并双向结构并对输出正则化
+    # 多层双向GRU
     gru_all = conv_1
-    for layer in gru_list:
-        gru_all = Add()([layer[0](gru_all), layer[1](gru_all)])
+    for num_layer in range(GRU_NUMS):
+        gru_all = bigru(gru_all, n_drop, n_cells)
+
+    # 全连接层
+    dense_1 = Dense(n_cells, activation="relu", use_bias=True)(Dropout(n_drop)(gru_all))
 
     # 输出层 使用softmax多分类输出
-    dense_output = Dense(words_size + 1, activation="softmax")(gru_all)
+    dense_output = Dense(words_size + 1, activation="softmax")(dense_1)
+
     # 保存GRU模型结构
     bigru_model = Model(inputs=input_data, outputs=dense_output)
 

@@ -239,6 +239,23 @@ labels_length = 70 # 标签固定长度
 batch_size = 45 # 每批次数据集大小
 filter_range = [1, 2, 4, 8, 16] # 扩大范围
 epochs = 300 # 训练次数
+num_mfcc = 32  # mfcc特征维数
+test_size = 0.1  # 测试集占比
+labels_length = 60  # 标签固定长度
+batch_size = 40  # 每批次数据集大小
+filter_range = [1, 2, 4, 8, 16]  # 扩大范围
+epochs = 280  # 训练次数
+
+# 动态学习率
+initial_learning_rate = 0.02   # 初始学习率
+decay_steps = 20000   # epoch衰减步数  
+decay_rate = 0.001    # 衰减值
+# 指数衰减
+lr_schedule = ExponentialDecay(
+    initial_learning_rate=initial_learning_rate,
+    decay_steps=decay_steps,
+    decay_rate=decay_rate,
+)
 
 # 划分训练集/测试集
 X_train, X_test, y_train, y_test = train_test_split(train_ds, train_label, test_size=test_size)
