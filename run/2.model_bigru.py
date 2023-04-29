@@ -174,7 +174,7 @@ def model_bigru(
 
     # 一维卷积层
     conv_1 = Conv1D(
-        filters=n_mfcc, kernel_size=4, strides=1, padding="vaild", activation=None
+        filters=n_mfcc, kernel_size=1, strides=1, padding="same", activation=None
     )(input_data)
     conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
 
@@ -226,12 +226,10 @@ num_mfcc = 32  # mfcc特征维数
 test_size = 0.1  # 测试集占比
 labels_length = 60  # 标签固定长度
 dropout = 0.2  # dropout比例
-batch_size = 40  # 每批次数据集大小
+batch_size = 32  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
-
-# 分段动态学习率
-lr = 0.001
+lr = 0.001  # 学习率
 
 
 # 划分训练集/测试集
@@ -283,7 +281,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/test/conv/bigru-conv-x2.h5")
+bigru_model.save(FILES_PATH + "models/test/conv/bigru-conv-x4.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/test/conv/bigru-conv-x2-h.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/conv/bigru-conv-x4-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
