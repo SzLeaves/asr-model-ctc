@@ -16,9 +16,9 @@ from tqdm import tqdm
 import tensorflow as tf
 
 # 设置显存大小
-# gpus = tf.config.experimental.list_physical_devices("GPU")
-# memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=7550)
-# tf.config.experimental.set_virtual_device_configuration(gpus[0], [memory_size])
+gpus = tf.config.experimental.list_physical_devices("GPU")
+memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)
+tf.config.experimental.set_virtual_device_configuration(gpus[0], [memory_size])
 
 # 导入keras API
 keras = tf.keras
@@ -51,15 +51,15 @@ FILES_PATH = "../output/"
 # 0. 读取数据集
 
 # 读取音频特征
-with open(FILES_PATH + "dataset/data_mfcc.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/backup/data_mfcc.pkl", "rb") as file:
     train_ds, mfcc_mean, mfcc_std = pickle.load(file)
 
 # 读取音频标注
-with open(FILES_PATH + "dataset/labels.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/backup/labels.pkl", "rb") as file:
     train_label = [x.strip().split() for x in pickle.load(file)]
 
 # 读取词库
-with open(FILES_PATH + "dataset/words_vec.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/backup/words_vec.pkl", "rb") as file:
     char2id, id2char = pickle.load(file)
 
 
@@ -160,7 +160,7 @@ def model_bigru(
     :return:               (bigru_model, ctc_model) 返回构建的BiGRU模型和CTC Loss模型
     """
     # 双向GRU单位层数
-    GRU_NUMS = 2
+    GRU_NUMS = 3
 
     # BiGRU层
     def bigru(inputs, drop, units):
@@ -174,7 +174,7 @@ def model_bigru(
 
     # 一维卷积层
     conv_1 = Conv1D(
-        filters=n_mfcc, kernel_size=1, strides=1, padding="same", activation=None
+        filters=n_mfcc, kernel_size=2, strides=1, padding="same", activation=None
     )(input_data)
     conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
 
@@ -226,7 +226,7 @@ num_mfcc = 32  # mfcc特征维数
 test_size = 0.1  # 测试集占比
 labels_length = 60  # 标签固定长度
 dropout = 0.2  # dropout比例
-batch_size = 32  # 每批次数据集大小
+batch_size = 42  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
 lr = 0.001  # 学习率
@@ -281,7 +281,7 @@ end = time.time() - start
 print("-- Times: %.2fs --" % end)
 
 # 保存模型
-bigru_model.save(FILES_PATH + "models/test/conv/bigru-conv-x4.h5")
+bigru_model.save(FILES_PATH + "models/test/conv/bigru-conv-x6.h5")
 # 保存训练数据
-with open(FILES_PATH + "models/test/conv/bigru-conv-x4-h.pkl", "wb") as file:
+with open(FILES_PATH + "models/test/conv/bigru-conv-x6-h.pkl", "wb") as file:
     pickle.dump(history.history, file)
