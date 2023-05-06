@@ -51,15 +51,15 @@ FILES_PATH = "../output/"
 # 0. 读取数据集
 
 # 读取音频特征
-with open(FILES_PATH + "dataset/backup/data_mfcc.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/data_mfcc.pkl", "rb") as file:
     train_ds, mfcc_mean, mfcc_std = pickle.load(file)
 
 # 读取音频标注
-with open(FILES_PATH + "dataset/backup/labels.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/labels.pkl", "rb") as file:
     train_label = [x.strip().split() for x in pickle.load(file)]
 
 # 读取词库
-with open(FILES_PATH + "dataset/backup/words_vec.pkl", "rb") as file:
+with open(FILES_PATH + "dataset/words_vec.pkl", "rb") as file:
     char2id, id2char = pickle.load(file)
 
 
