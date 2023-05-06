@@ -17,7 +17,7 @@ import tensorflow as tf
 
 # 设置显存大小
 gpus = tf.config.experimental.list_physical_devices("GPU")
-memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)
+memory_size = tf.config.experimental.VirtualDeviceConfiguration(memory_limit=13000)
 tf.config.experimental.set_virtual_device_configuration(gpus[0], [memory_size])
 
 # 导入keras API
@@ -174,7 +174,7 @@ def model_bigru(
 
     # 一维卷积层
     conv_1 = Conv1D(
-        filters=n_mfcc, kernel_size=2, strides=1, padding="same", activation=None
+        filters=n_mfcc, kernel_size=1, strides=1, padding="same", activation=None
     )(input_data)
     conv_1 = Activation("tanh")(BatchNormalization()(conv_1))
 
@@ -226,7 +226,7 @@ num_mfcc = 32  # mfcc特征维数
 test_size = 0.1  # 测试集占比
 labels_length = 60  # 标签固定长度
 dropout = 0.2  # dropout比例
-batch_size = 42  # 每批次数据集大小
+batch_size = 40  # 每批次数据集大小
 num_cells = 512  # 每层神经元大小
 epochs = 280  # 训练次数
 lr = 0.001  # 学习率
