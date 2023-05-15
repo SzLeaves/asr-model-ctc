@@ -236,9 +236,9 @@ def model_wavenet(
     )
 
     # 定义模型优化器, 编译模型
-    opt_ada = Adam(learning_rate=learning_rate)
+    opt_sgd = SGD(learning_rate=learning_rate, momentum=0.9, nesterov=True, clipnorm=5)
     ctc_model.compile(
-        loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_ada
+        loss={"ctc": lambda ctc_true, ctc_pred: ctc_pred}, optimizer=opt_sgd
     )
 
     # 输出模型信息
